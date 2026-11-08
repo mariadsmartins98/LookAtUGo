@@ -8,6 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <meta name="theme-color" content="#4a58d6">
 <meta name="apple-mobile-web-app-title" content="LookAtUGo">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -82,6 +83,9 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const dl=o=>o==0?'Today':o==1?'Tomorrow':new Date(Date.now()+o*864e5).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'});
 const STAGES=['Spark','Exploring','Building','Done'];
 const CATS=['Food','Transport','Home','Fun','Health'];
+const CID='982769611485-aqiil37otje7nsccgmfcpnegi6eatbe1.apps.googleusercontent.com';
+const tk=t=>t=='All day'?'00:00':t;
+const ALL=()=>[...D.ev.map((e,i)=>({e,i})),...(D.gev||[]).map((e,i)=>({e,i:'g'+i}))];
 const iso=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
 const seed=()=>({
 tx:[],
@@ -99,17 +103,18 @@ const spent=c=>D.tx.filter(t=>t[0]<30&&t[1]==c).reduce((s,t)=>s+t[3],0);
 function vToday(){
 const h=new Date().getHours(),g=h<12?'Good morning':h<18?'Good afternoon':'Good evening';
 const rng=[[0,0],[0,6],[0,29]][S.view];
-const evs=D.ev.map((e,i)=>({e,i})).filter(x=>x.e[0]>=rng[0]&&x.e[0]<=rng[1]).sort((a,b)=>a.e[0]-b.e[0]||a.e[1].localeCompare(b.e[1]));
-const nxt=D.ev.map((e,i)=>({e,i})).filter(x=>x.e[0]==0&&!x.e[3]).sort((a,b)=>a.e[1].localeCompare(b.e[1]))[0];
+const evs=ALL().filter(x=>x.e[0]>=rng[0]&&x.e[0]<=rng[1]).sort((a,b)=>a.e[0]-b.e[0]||tk(a.e[1]).localeCompare(tk(b.e[1])));
+const nxt=ALL().filter(x=>x.e[0]==0&&!x.e[3]&&x.e[1]!='All day').sort((a,b)=>tk(a.e[1]).localeCompare(tk(b.e[1])))[0];
 let list='',last=-1;
 evs.forEach(({e,i})=>{if(S.view&&e[0]!=last){list+=`<div class="day">${dl(e[0])}</div>`;last=e[0]}
-list+=`<button class="ev ${e[3]?'done':''}" onclick="tog(${i})"><span class="ck">${e[3]?'✓':''}</span><span class="tm">${e[1]}</span><span class="t">${esc(e[2])}</span></button>`});
+list+=`<button class="ev ${e[3]?'done':''}" onclick="tog('${i}')"><span class="ck">${e[3]?'✓':''}</span><span class="tm">${e[1]}</span><span class="t">${esc(e[2])}</span></button>`});
 const tb=Object.values(D.bud).reduce((a,b)=>a+b,0),ts=sum(0,29),pct=tb?Math.min(100,ts/tb*100):0;
 const ip=D.ideas.find(x=>x.stage==1||x.stage==2);
 return `<h1>${g}, Maria</h1><p class="sub">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</p>
 ${nxt?`<div class="next"><small>Next up at ${nxt.e[1]}</small><b>${esc(nxt.e[2])}</b></div>`:`<div class="next"><b>All clear for today 🎉</b><small>Nothing left on your list.</small></div>`}
 <div class="seg">${['Today','This week','This month'].map((t,i)=>`<button class="${S.view==i?'on':''}" onclick="S.view=${i};render()">${t}</button>`).join('')}</div>
 <div class="card">${list||'<p class="sub" style="margin:0">Nothing planned. Enjoy the space.</p>'}</div>
+<div class="card"><div class="row"><b>Google Calendar</b><button class="btn s" onclick="connectG()">${D.gat?'Sync now':'Connect'}</button></div><div class="sub" style="margin:6px 0 0">${S.gmsg||(D.gat?'Last synced '+new Date(D.gat).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'Read-only. Your events will appear in the agenda above.')}</div></div>
 <div class="card"><input id="et" placeholder="New appointment or task"><div class="row" style="gap:8px"><input id="ed" type="date" value="${iso()}" aria-label="Date"><input id="eh" type="time" value="09:00" aria-label="Time"></div><button class="btn s" onclick="addEv()">Add to agenda</button></div>
 <h2>Budget this month</h2>
 <div class="card"><div class="row"><b>${eur(ts)} <span class="sub">${tb?'of '+eur(tb):'spent · set budgets in Money'}</span></b>${tb?`<span class="sub">${eur(tb-ts)} left</span>`:''}</div><div class="bar" style="margin-top:10px"><i style="width:${pct}%"></i></div></div>
@@ -148,7 +153,7 @@ ${o?`<div class="chips">${STAGES.map((s,i)=>`<button class="chip ${x.stage==i?'o
 
 function render(){$('#app').innerHTML=({today:vToday,money:vMoney,ideas:vIdeas})[S.tab]();document.querySelectorAll('.tb button').forEach(b=>b.classList.toggle('on',b.dataset.t==S.tab))}
 function go(t){S.tab=t;render();scrollTo(0,0)}
-function tog(i){D.ev[i][3]=D.ev[i][3]?0:1;save();render()}
+function tog(k){k=String(k);const a=k[0]=='g'?D.gev[+k.slice(1)]:D.ev[+k];a[3]=a[3]?0:1;save();render()}
 function addTx(){const a=parseFloat($('#fa').value.replace(',','.'));if(!a||a<=0){$('#fa').focus();return}D.tx.unshift([0,$('#fc').value,$('#fl').value.trim()||$('#fc').value,a]);S.form=false;save();render()}
 function bump(i){D.goals[i][1]=Math.min(D.goals[i][2],D.goals[i][1]+50);save();render()}
 function addIdea(){const v=$('#ni').value.trim();if(!v){$('#ni').focus();return}D.ideas.unshift({id:D.nid++,text:v,stage:0,notes:[]});save();render()}
@@ -157,6 +162,26 @@ function addNote(id){const v=$('#nn').value.trim();if(!v){$('#nn').focus();retur
 function setBud(c,v){D.bud[c]=parseFloat(v)||0;save();render()}
 function addGoal(){const n=$('#gn').value.trim(),t=parseFloat($('#gt').value);if(!n){$('#gn').focus();return}if(!t||t<=0){$('#gt').focus();return}D.goals.push([n,0,t]);save();render()}
 function addEv(){const t=$('#et').value.trim(),d=$('#ed').value;if(!t){$('#et').focus();return}const o=Math.round((new Date(d+'T00:00')-new Date(new Date().toDateString()))/864e5);if(isNaN(o)||o<0){$('#ed').focus();return}D.ev.push([o,$('#eh').value||'09:00',t,0]);save();render()}
+let tc=null;
+function connectG(){
+if(!(window.google&&google.accounts&&google.accounts.oauth2)){S.gmsg='Google sign-in is still loading. Try again in a moment.';render();return}
+tc=tc||google.accounts.oauth2.initTokenClient({client_id:CID,scope:'https://www.googleapis.com/auth/calendar.readonly',callback:r=>{if(r.error){S.gmsg='Could not connect ('+r.error+').';render();return}syncG(r.access_token)}});
+tc.requestAccessToken();
+}
+async function syncG(tok){
+S.gmsg='Syncing…';render();
+try{
+const t0=new Date();t0.setHours(0,0,0,0);const t1=new Date(t0.getTime()+30*864e5);
+const u='https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=100&timeMin='+encodeURIComponent(t0.toISOString())+'&timeMax='+encodeURIComponent(t1.toISOString());
+const r=await fetch(u,{headers:{Authorization:'Bearer '+tok}});
+if(!r.ok)throw new Error('HTTP '+r.status);
+const j=await r.json();
+const old={};(D.gev||[]).forEach(e=>old[e[4]]=e[3]);
+D.gev=(j.items||[]).filter(x=>x.status!='cancelled').map(x=>{const s=x.start||{};const dt=s.dateTime?new Date(s.dateTime):new Date(s.date+'T00:00');const o=Math.round((new Date(dt.getFullYear(),dt.getMonth(),dt.getDate())-t0)/864e5);const tm=s.dateTime?dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'All day';return [o,tm,x.summary||'(No title)',old[x.id]?1:0,x.id]});
+D.gat=Date.now();save();S.gmsg='Calendar synced.';
+}catch(e){S.gmsg='Sync failed ('+e.message+').'}
+render();
+}
 render();
 </script>
 </body>
